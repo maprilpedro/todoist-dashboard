@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Todoist Dashboard - Time Scheduler</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-hover: #f0f1f4;
+    --border: #e2e4ea;
+    --text: #1a1d27;
+    --text-muted: #6b7085;
+    --accent: #6c5ce7;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .header-sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+  .header-stats { display: flex; gap: 28px; }
+
+  .stat { text-align: center; }
+  .stat-value { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Summary chips */
+  .summary-bar {
+    display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+
+  .summary-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    cursor: pointer; transition: all 0.2s; user-select: none;
+  }
+  .summary-chip:hover { border-color: var(--accent); }
+  .summary-chip.active { border-color: var(--accent); background: rgba(108,92,231,0.08); }
+
+  .chip-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .chip-name { font-size: 13px; font-weight: 500; }
+  .chip-count { font-size: 12px; color: var(--text-muted); }
+  .chip-time { font-size: 11px; color: var(--accent); }
+
+  /* Dashboard grid */
+  .dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+  }
+
+  .label-group {
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    transition: border-color 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .label-group:hover { border-color: var(--accent); }
+
+  .label-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px;
+    cursor: pointer; user-select: none;
+  }
+
+  .label-header h2 {
+    font-size: 15px; font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .label-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .label-count {
+    background: var(--border); color: var(--text-muted);
+    padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+  }
+
+  .label-time {
+    font-size: 11px; color: var(--accent); font-weight: 500;
+  }
+
+  .collapse-icon { color: var(--text-muted); font-size: 11px; transition: transform 0.2s; }
+  .collapsed .collapse-icon { transform: rotate(-90deg); }
+  .collapsed .label-tasks { display: none; }
+
+  .label-tasks {
+    padding: 4px 8px 8px;
+    max-height: 520px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  .label-tasks::-webkit-scrollbar { width: 4px; }
+  .label-tasks::-webkit-scrollbar-track { background: transparent; }
+  .label-tasks::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .task {
+    padding: 10px 12px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .task:hover { background: var(--surface-hover); }
+
+  .task-priority {
+    width: 4px; min-height: 22px; border-radius: 2px;
+    flex-shrink: 0; margin-top: 2px;
+  }
+  .task-priority.p1 { background: #e74c3c; }
+  .task-priority.p2 { background: #e67e22; }
+  .task-priority.p3 { background: #3498db; }
+  .task-priority.p4 { background: #c8cbd5; }
+
+  .task-content { flex: 1; min-width: 0; }
+
+  .task-title-row {
+    display: flex; align-items: flex-start; gap: 6px;
+  }
+
+  .task-title { font-size: 13px; line-height: 1.4; word-break: break-word; flex: 1; }
+
+  .task-link {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 12px;
+    transition: all 0.15s;
+    margin-top: 1px;
+  }
+  .task-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(108,92,231,0.06);
+  }
+
+  .task-meta {
+    display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; align-items: center;
+  }
+
+  .task-due {
+    font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 500;
+  }
+  .task-due.overdue { background: rgba(231,76,60,0.1); color: #c0392b; }
+  .task-due.today { background: rgba(46,204,113,0.1); color: #1e8449; }
+  .task-due.upcoming { background: rgba(52,152,219,0.1); color: #2471a3; }
+  .task-due.future { background: rgba(107,112,133,0.08); color: var(--text-muted); }
+
+  .task-duration {
+    font-size: 11px; padding: 1px 7px; border-radius: 4px;
+    background: rgba(108,92,231,0.08); color: #5a4bd1; font-weight: 500;
+  }
+
+  .task-project { font-size: 11px; color: var(--text-muted); }
+
+  .task-footnotes {
+    display: flex; gap: 4px; margin-top: 3px;
+  }
+
+  .footnote-chip {
+    font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    background: rgba(0,0,0,0.04); color: #939bb4;
+    font-style: italic;
+  }
+
+  /* Footnote section */
+  .footnotes-section {
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .footnotes-section h3 {
+    font-size: 13px; color: var(--text-muted); font-weight: 500;
+    margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  .footnote-legend {
+    display: flex; gap: 20px; flex-wrap: wrap;
+  }
+
+  .footnote-item {
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);
+  }
+
+  .footnote-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 3px;
+    background: rgba(0,0,0,0.05); color: #636e72; font-style: italic;
+  }
+
+  .footnote-count { font-weight: 600; color: var(--text); }
+
+  /* Update button */
+  .btn-update {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; border-radius: 8px;
+    background: var(--accent); color: #fff; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-update:hover { background: #5a4bd1; }
+  .btn-update:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-update .spinner {
+    width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.6s linear infinite; display: none;
+  }
+  .btn-update.loading .spinner { display: inline-block; }
+  .btn-update.loading .btn-label { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .last-updated {
+    font-size: 11px; color: var(--text-muted); margin-left: 12px;
+  }
+
+  .header-actions {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .btn-settings {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .btn-settings:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Token modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; backdrop-filter: blur(2px);
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: var(--surface); border-radius: 12px; padding: 24px;
+    width: 420px; max-width: 90vw; border: 1px solid var(--border);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
+  .modal input {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size: 13px; font-family: monospace;
+    margin-bottom: 16px;
+  }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-actions button {
+    padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.15s;
+  }
+  .modal-actions button.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .modal-actions button.primary:hover { background: #5a4bd1; }
+  .modal-actions button:not(.primary):hover { border-color: var(--text-muted); }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; z-index: 200;
+    transition: opacity 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .toast.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+  .toast.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+  .toast.hidden { opacity: 0; pointer-events: none; }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    .dashboard { grid-template-columns: 1fr; }
+    .header { flex-direction: column; gap: 16px; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Todoist Time Scheduler</h1>
+    <div class="header-sub">Mapril Pedro Ferreira &middot; Week 7 &middot; 10 Feb 2026</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:32px">
+    <div class="header-stats">
+      <div class="stat">
+        <div class="stat-value" id="total-tasks">0</div>
+        <div class="stat-label">Tasks</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="due-today">0</div>
+        <div class="stat-label">Due Today</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="overdue">0</div>
+        <div class="stat-label">Overdue</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="total-time">0h</div>
+        <div class="stat-label">Estimated</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-update" id="btn-update" onclick="updateFromTodoist()">
+        <span class="spinner"></span>
+        <span class="btn-label">Update</span>
+      </button>
+      <button class="btn-settings" onclick="showTokenModal()" title="API Token Settings">&#x2699;</button>
+      <span class="last-updated" id="last-updated"></span>
+    </div>
+  </div>
+</div>
+
+<div class="summary-bar" id="summary-bar"></div>
+<div class="dashboard" id="dashboard"></div>
+<div class="footnotes-section" id="footnotes"></div>
+
+<div class="modal-overlay hidden" id="token-modal">
+  <div class="modal">
+    <h3>Todoist API Token</h3>
+    <p>Enter your API token to enable live updates. Find it at:<br>
+      <strong>Todoist Settings &rarr; Integrations &rarr; Developer &rarr; API token</strong></p>
+    <input type="password" id="token-input" placeholder="Paste your API token here..." />
+    <div class="modal-actions">
+      <button onclick="closeTokenModal()">Cancel</button>
+      <button class="primary" onclick="saveToken()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script>
+const TASKS = [
+  {"id":"6f98gPwW9qhCHpvf","content":"Reprendre Argent de Raiffeisen","labels":["High Pressure"],"priority":"p4","projectName":"Inbox","dueDate":"2026-02-13T11:30:00Z","duration":null},
+  {"id":"6f98gQQ37Qxh6M8f","content":"Acheter OR","labels":["High Pressure"],"priority":"p4","projectName":"Inbox","dueDate":"2026-01-10","duration":null},
+  {"id":"6fhWWFC25Mqc7G74","content":"Change date Wenger midi","labels":["High Pressure"],"priority":"p4","projectName":"Discipline","dueDate":"2026-02-10T00:00:00","duration":"15m"},
+  {"id":"6fpqqGhV3WWChm5j","content":"Faire Status UBS","labels":["High Pressure"],"priority":"p4","projectName":"Toit Maison","dueDate":"2026-02-23","duration":null},
+  {"id":"6fq6GHX94Rgjm7Hc","content":"Revue Hebdomadaire GTD-Lite","labels":["High Pressure"],"priority":"p1","projectName":"Productivity","dueDate":"2026-02-06T10:15:00","duration":"30m","recurring":"every Fri"},
+  {"id":"6fr2W5863Gf66wCv","content":"Get 3 opportunities in report","labels":["High Pressure"],"priority":"p4","projectName":"ASO Security","dueDate":"2026-02-11T09:30:00Z","duration":null},
+  {"id":"6fm9mqCx873m3V9W","content":"Rammener papa et materiel","labels":["Deadline"],"priority":"p4","projectName":"Cave","dueDate":"2026-01-31T08:00:00","duration":"8h"},
+  {"id":"6fm9mxpVgHW6JmrW","content":"Finir les traveaux phase 1 protection","labels":["Deadline"],"priority":"p4","projectName":"Cave","dueDate":"2026-01-31T11:00:00","duration":null},
+  {"id":"6fm9555QQJ33HRC5","content":"Comprendre quels examens je peux passer","labels":["Draining","gimmeadate"],"priority":"p4","projectName":"Allemand B1/A2","dueDate":null,"duration":null},
+  {"id":"6fm95C9RQ7HhgXF5","content":"Creer un plan d'entrainement","labels":["Draining","gimmeadate"],"priority":"p4","projectName":"Allemand B1/A2","dueDate":null,"duration":null},
+  {"id":"6fm9p2VhMpRFvMF4","content":"Finir les traveaux phase 2 peinture","labels":["Draining"],"priority":"p4","projectName":"Cave","dueDate":"2026-05-01T11:00:00","duration":null},
+  {"id":"6fmPJgJCc6JHc2Jv","content":"Get list of PROD URLS from Andrei","labels":["Draining"],"priority":"p4","projectName":"Visual Comparison","dueDate":"2026-01-26T11:30:00Z","duration":"30m"},
+  {"id":"6fpqhrphC8mMv5mv","content":"Get ACS why not using it","labels":["Draining"],"priority":"p4","projectName":"Visual Comparison","dueDate":"2026-02-11T09:15:00Z","duration":"15m"},
+  {"id":"6frQmpR8xx94JHp4","content":"Recap Couts de transformation in 2 weeks","labels":["Draining"],"priority":"p4","projectName":"Cave","dueDate":"2026-01-29T08:00:00","duration":"1h"},
+  {"id":"6frQmwGP44H8Hr2W","content":"Gather toutes les factures que j'ai partout","labels":["Draining"],"priority":"p4","projectName":"Cave","dueDate":"2026-01-28T20:00:00","duration":"30m"},
+  {"id":"6frR3HcXfHcfJJcp","content":"CAll Salt on for mobile phone","labels":["Draining"],"priority":"p4","projectName":"Life Ops 2026","dueDate":"2026-01-28T12:00:00","duration":"30m"},
+  {"id":"6fpqvP5wqXVGFX2j","content":"Finalizer Signum","labels":["energizing"],"priority":"p4","projectName":"Toit Maison","dueDate":"2026-03-01T09:00:00","duration":"30m"},
+  {"id":"6fq6GpJmX4R56Qgc","content":"Rituel de Demarrage","labels":["energizing"],"priority":"p1","projectName":"Productivity","dueDate":"2026-01-29T09:00:00","duration":"10m","recurring":"every weekday 9am"},
+  {"id":"6fq6GrjfH8Jjhc76","content":"Rituel de fin","labels":["energizing"],"priority":"p1","projectName":"Productivity","dueDate":"2026-01-29T17:30:00","duration":"10m","recurring":"every weekday 5:30pm"},
+  {"id":"6fm94JfC68vPFPxJ","content":"Repertoire: Connaitre 3 partitions par coeur","labels":["interesting","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fq6Qp428fFQhCRJ","content":"Practice Guitar every day","labels":["interesting"],"priority":"p1","projectName":"Guitare Jazz","dueDate":"2026-01-29T20:00:00","duration":"30m","recurring":"every day 20:00"},
+  {"id":"6fpqpG9hM2CMFp9W","content":"Payer Papa pour materiel, traveaux","labels":["Boring"],"priority":"p4","projectName":"Cave","dueDate":"2026-01-31T10:00:00","duration":null},
+  {"id":"66Wh69rF65j7QVjG","content":"Sa majeste des mouches de William Golding","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhV3Qc9PH7jCwG","content":"La Serpe Philippe Jaenada Julliard, 2017","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhVj4PjX648jrG","content":"Ordinary Men - WW2","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66Whgr9mqrHR9XXG","content":"Coherence","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhhGpXrF4W22WG","content":"L'hôtel Mirobole, 2017","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WjGX4GjQfCpm3G","content":"Candyland Jax Miller Flammarion / Ombres noires, 2017","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WjPjxF2Ccpm6Xp","content":"Un homme qui dort - Georges Perec","labels":["books","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66Wh6wWHHm4w3MX2","content":"Hell Ride","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhFXGgPmfGRWG2","content":"Stone Cold","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhGHPJvG6m5JP2","content":"Harley Davidson and the Marlboroman","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhHQ8xH4q8mmrR","content":"Fixing the Shadow","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhhjqQFCxjPC7R","content":"Le Jour d'après, Hong Sang-soo","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhhrXRVHjG769R","content":"Les apaches","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66Whhx2q473WgwhR","content":"Electra Glide in Blue","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66Whhxh63RXRHgjR","content":"Get Movies from Ettore Scola","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WjGQmfcppcVGc2","content":"The 15 Greatest Avant-Garde Filmmakers","labels":["movie","getmealabel","gimmeadate"],"priority":"p4","projectName":"Culture","dueDate":null,"duration":null},
+  {"id":"66WhCfP7QVq3vPqj","content":"Practice the micro-expressions in the mirror","labels":["getmealabel","gimmeadate"],"priority":"p3","projectName":"SOMEDAY/ONEDAY","dueDate":null,"duration":null},
+  {"id":"6fh7H6Vr7WFRp6j4","content":"Hurlevent","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Lire 20 Livres en 2026","dueDate":null,"duration":null},
+  {"id":"6fh7HFH93mcPJ7j4","content":"Perfidia de James Elroy","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Lire 20 Livres en 2026","dueDate":null,"duration":null},
+  {"id":"6fh7HG6cj9XMc75W","content":"Les enchanteurs de James Elroy","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Lire 20 Livres en 2026","dueDate":null,"duration":null},
+  {"id":"6fm94F5J6G9PqH8J","content":"Aural Skills Transposer 3 melodies par coeur","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94FJG48gqQ8cr","content":"Vocabulaire: Connaitre 5 licks","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94G6m2j5G5Pwr","content":"Technique: 3 mesures a 150bpm doubles croches","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94Hr74J7pRF5r","content":"Theorie: ii-V-I sur 3 accords, 3 positions","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94Q3q7Mj683MJ","content":"Definition des 3 melodie","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94QWxp8PJrfVJ","content":"Trouver du papier a ecrire","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94Rq2jH2cqPQJ","content":"Comprendre comment verifier la transcription","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm94VxHQPchvH2J","content":"Transcrire: All Jazz melodie","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fm955fcc376Qxh5","content":"Ou a Bale passer mes examens","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Allemand B1/A2","dueDate":null,"duration":null},
+  {"id":"6fm956758F92Vm95","content":"Quand passer mes examens d'allemand","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Allemand B1/A2","dueDate":null,"duration":null},
+  {"id":"6fm95FvGj62j67p9","content":"Definir mes 3 projets","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6fm9845W93qGXmmx","content":"Obsidian: Quiet Hours-Update Free GA","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Quiet Hours","dueDate":null,"duration":null},
+  {"id":"6fm998FW44G4RwWh","content":"Obsidian: Aging Customers 90%","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Aging Customers","dueDate":null,"duration":null},
+  {"id":"6fm99pR35X6cFchr","content":"Obsidian: Optional Pay Quiet Hours","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Optional Pay QH","dueDate":null,"duration":null},
+  {"id":"6fm9CC77M6xQJCwC","content":"Obsidian: EDA Quiet Hours","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"EDA QH","dueDate":null,"duration":null},
+  {"id":"6fm9CcXPG68H7MF4","content":"Obsidian: Visual Comparison Resources","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Visual Comparison","dueDate":null,"duration":null},
+  {"id":"6fm9CxPjJF7c7g4M","content":"Obsidian: Visual Comparison 5 Customers","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Visual Comparison","dueDate":null,"duration":null},
+  {"id":"6fm9FG534GPVHcHR","content":"Obsidian: EDA Visual Comparison","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"EDA Visual Comparison","dueDate":null,"duration":null},
+  {"id":"6fm9Fjvw8FPCRGPr","content":"Obsidian: ASO Permissions Too Large","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"ASO Permissions","dueDate":"2026-06-30","duration":null},
+  {"id":"6fm9GPHfqR9VHwH6","content":"Obsidian: ASO Permissions Redundant","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"ASO Permissions","dueDate":null,"duration":null},
+  {"id":"6fm9Gj82jrW8prvP","content":"Obsidian: ASO Security Vulnerabilities","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"ASO Security","dueDate":"2026-06-30","duration":null},
+  {"id":"6fm9GxmGgWr9fH9h","content":"Obsidian: Experience Hub Security","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Experience Hub","dueDate":"2026-03-31","duration":null},
+  {"id":"6fm9H9q62qp552Hp","content":"Obsidian: EDA Permissions Too Large","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"EDA Permissions","dueDate":"2026-03-31","duration":null},
+  {"id":"6fm9p3fP72Qv49Q4","content":"Finir les traveaux phase 3 re-ammenager","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Cave","dueDate":null,"duration":null},
+  {"id":"6fmCJ5q664RmmRFr","content":"Obsidian: Guitare Jazz Level 1","labels":["getmealabel","gimmeadate"],"priority":"p3","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fmCJXFv6RcQP47r","content":"Midnight Blue","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fmCJXwWH86qVHJJ","content":"Afternoon in Paris","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Guitare Jazz","dueDate":null,"duration":null},
+  {"id":"6fmCf8G54VX84MJH","content":"Obsidian: Carriere Adobe 2026","labels":["getmealabel","gimmeadate"],"priority":"p3","projectName":"Carriere Adobe","dueDate":null,"duration":null},
+  {"id":"6fpqjJG7fcc4jCr7","content":"Get book from David Icke","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Inbox","dueDate":null,"duration":null},
+  {"id":"6fpqqcqRjVhvwX8C","content":"Obsidian: Refaire Toit Maison","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Toit Maison","dueDate":null,"duration":null},
+  {"id":"6fq6GC7qrhJ6M28c","content":"Creation du projet","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6GJrM8fjq9F6c","content":"Revoir les points non faits durant la semaine","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6GMrjvjfVvwg6","content":"Revoir liste des choses a arreter","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6GPmrhmGWQf26","content":"Calendrier base sur les contraintes","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6GR7R36MQ7WF6","content":"Hygiene des reunions","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6Gfmx7frcC27c","content":"Time Boxing","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Productivity","dueDate":null,"duration":null},
+  {"id":"6fq6vCRMfWjX8fJh","content":"Avoir premiere Beta Kenny sur Mac","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6fq6vFQ92F6WqQc9","content":"Avoir premiere Beta Kenny sur IOS","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6fqGC3x4r7CgH39P","content":"Get list of Customers per Opportunity","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"ASO Security","dueDate":null,"duration":null},
+  {"id":"6fqxhHpv8hqmjC87","content":"Review Apple PDF Pro subscription renewal","labels":["getmealabel"],"priority":"p4","projectName":"Inbox","dueDate":"2027-01-15","duration":null},
+  {"id":"6fr2VcfGgV9VRvP9","content":"Faire un compte Stripe ?","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6fr2VmhHPrHPG529","content":"Lancer l'application en production","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6frC4RHCxf573VHh","content":"Revoir les payements Apple, payer moins de fees","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Apps iOS/Mac","dueDate":null,"duration":null},
+  {"id":"6fxRc88xfV6C6PJ7","content":"Faire notes de frais","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Inbox","dueDate":null,"duration":null},
+  {"id":"6fxRcJ7g5p5rH7M7","content":"Répondre Accenture pour multiples pauses","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Inbox","dueDate":null,"duration":null},
+  {"id":"6fxRcMRR7Gh5gvQ7","content":"Check pour GA quiet hours","labels":["getmealabel"],"priority":"p4","projectName":"Inbox","dueDate":"2026-02-26","duration":null},
+  {"id":"6fxRqrhWw9rqHhpf","content":"temp tag creator","labels":["getmealabel","gimmeadate"],"priority":"p4","projectName":"Inbox","dueDate":null,"duration":null},
+  {"id":"6fxRrgjRRJjwjRVf","content":"temp label creator getmealabel","labels":["getmealabel"],"priority":"p4","projectName":"Inbox","dueDate":null,"duration":null}
+];
+
+// Label classification
+const MAIN_LABELS = {
+  "High Pressure":  { color: "#e74c3c", icon: "🔴", order: 1, desc: "Urgent & important" },
+  "Deadline":       { color: "#e84393", icon: "⏰", order: 2, desc: "Hard deadlines" },
+  "Draining":       { color: "#e67e22", icon: "🟠", order: 3, desc: "Energy-draining tasks" },
+  "energizing":     { color: "#2ecc71", icon: "🟢", order: 4, desc: "Energy-giving tasks" },
+  "interesting":    { color: "#3498db", icon: "🔵", order: 5, desc: "Interesting tasks" },
+  "Boring":         { color: "#95a5a6", icon: "⚪", order: 6, desc: "Low-energy tasks" },
+  "books":          { color: "#a29bfe", icon: "📚", order: 7, desc: "Books to read" },
+  "movie":          { color: "#fd79a8", icon: "🎬", order: 8, desc: "Movies to watch" },
+};
+
+const META_LABELS = ["getmealabel", "gimmeadate"];
+
+const TODAY = new Date("2026-02-10");
+TODAY.setHours(0, 0, 0, 0);
+
+function parseDuration(dur) {
+  if (!dur) return 0;
+  let minutes = 0;
+  const h = dur.match(/(\d+(?:\.\d+)?)h/);
+  const m = dur.match(/(\d+)m/);
+  if (h) minutes += parseFloat(h[1]) * 60;
+  if (m) minutes += parseInt(m[1]);
+  return minutes;
+}
+
+function formatMinutes(mins) {
+  if (mins === 0) return "0h";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h && m) return h + "h " + m + "m";
+  if (h) return h + "h";
+  return m + "m";
+}
+
+function getDueStatus(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const due = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = Math.floor((due - TODAY) / 86400000);
+  if (diff < 0) return "overdue";
+  if (diff === 0) return "today";
+  if (diff <= 7) return "upcoming";
+  return "future";
+}
+
+function hasTime(dateStr) {
+  if (!dateStr) return false;
+  // date-only formats: "2026-01-10", "2026-02-10T00:00:00" (midnight with no Z = date-only in Todoist)
+  if (!dateStr.includes("T")) return false;
+  if (dateStr.endsWith("T00:00:00")) return false;
+  return true;
+}
+
+function formatTime(d) {
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateOnly(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const opts = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== 2026) opts.year = "numeric";
+  return d.toLocaleDateString("en-GB", opts);
+}
+
+function formatDateTimeRange(dateStr, durationStr) {
+  if (!dateStr) return { display: null, showDurationSeparately: false };
+  const d = new Date(dateStr);
+  const dateOnly = formatDateOnly(dateStr);
+  const hasT = hasTime(dateStr);
+  const durMins = parseDuration(durationStr);
+
+  if (hasT && durMins > 0) {
+    // Show: "13 Feb · 11:30 → 12:00"
+    const startTime = formatTime(d);
+    const end = new Date(d.getTime() + durMins * 60000);
+    const endTime = formatTime(end);
+    return { display: dateOnly + " · " + startTime + " → " + endTime, showDurationSeparately: false };
+  }
+  if (hasT) {
+    // Show: "13 Feb · 11:30"
+    return { display: dateOnly + " · " + formatTime(d), showDurationSeparately: false };
+  }
+  // Date only
+  return { display: dateOnly, showDurationSeparately: true };
+}
+
+function escapeHtml(text) {
+  const d = document.createElement("div");
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function getMainLabel(task) {
+  for (const label of task.labels) {
+    if (MAIN_LABELS[label]) return label;
+  }
+  return null;
+}
+
+function getMetaLabels(task) {
+  return task.labels.filter(l => META_LABELS.includes(l));
+}
+
+function hasOnlyMetaLabels(task) {
+  return task.labels.every(l => META_LABELS.includes(l));
+}
+
+// Group tasks: main label groups + "Needs Label" for meta-only
+function groupTasks() {
+  const groups = {};
+  const needsLabel = [];
+
+  TASKS.forEach(t => {
+    const mainLabel = getMainLabel(t);
+    if (mainLabel) {
+      if (!groups[mainLabel]) groups[mainLabel] = [];
+      groups[mainLabel].push(t);
+    } else {
+      needsLabel.push(t);
+    }
+  });
+
+  return { groups, needsLabel };
+}
+
+function sortTasks(tasks) {
+  return tasks.sort((a, b) => {
+    const pa = parseInt(a.priority.slice(1));
+    const pb = parseInt(b.priority.slice(1));
+    if (pa !== pb) return pa - pb;
+    // Overdue first
+    const sa = getDueStatus(a.dueDate);
+    const sb = getDueStatus(b.dueDate);
+    const order = { overdue: 0, today: 1, upcoming: 2, future: 3 };
+    const oa = sa ? order[sa] : 4;
+    const ob = sb ? order[sb] : 4;
+    if (oa !== ob) return oa - ob;
+    if (a.dueDate && b.dueDate) return new Date(a.dueDate) - new Date(b.dueDate);
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return 0;
+  });
+}
+
+let activeFilter = "all";
+
+function render() {
+  const { groups, needsLabel } = groupTasks();
+  const sortedMainLabels = Object.keys(MAIN_LABELS).filter(l => groups[l]?.length).sort((a, b) => MAIN_LABELS[a].order - MAIN_LABELS[b].order);
+
+  // Stats
+  document.getElementById("total-tasks").textContent = TASKS.length;
+  document.getElementById("due-today").textContent = TASKS.filter(t => getDueStatus(t.dueDate) === "today").length;
+  document.getElementById("overdue").textContent = TASKS.filter(t => getDueStatus(t.dueDate) === "overdue").length;
+  const totalMins = TASKS.reduce((s, t) => s + parseDuration(t.duration), 0);
+  document.getElementById("total-time").textContent = formatMinutes(totalMins);
+
+  // Summary chips
+  const summaryBar = document.getElementById("summary-bar");
+  summaryBar.innerHTML = `<div class="summary-chip ${activeFilter === 'all' ? 'active' : ''}" data-filter="all">
+    <span class="chip-name">All</span><span class="chip-count">${TASKS.length}</span>
+  </div>` + sortedMainLabels.map(label => {
+    const cfg = MAIN_LABELS[label];
+    const tasks = groups[label];
+    const mins = tasks.reduce((s, t) => s + parseDuration(t.duration), 0);
+    return `<div class="summary-chip ${activeFilter === label ? 'active' : ''}" data-filter="${label}">
+      <span class="chip-dot" style="background:${cfg.color}"></span>
+      <span class="chip-name">${cfg.icon} ${label}</span>
+      <span class="chip-count">${tasks.length}</span>
+      ${mins > 0 ? `<span class="chip-time">${formatMinutes(mins)}</span>` : ''}
+    </div>`;
+  }).join("") + (needsLabel.length ? `<div class="summary-chip ${activeFilter === '_needslabel' ? 'active' : ''}" data-filter="_needslabel">
+    <span class="chip-dot" style="background:#636e72"></span>
+    <span class="chip-name">Needs Label</span>
+    <span class="chip-count">${needsLabel.length}</span>
+  </div>` : '');
+
+  summaryBar.querySelectorAll(".summary-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      activeFilter = chip.dataset.filter;
+      render();
+    });
+  });
+
+  // Dashboard cards
+  const dashboard = document.getElementById("dashboard");
+  let html = "";
+
+  sortedMainLabels.forEach(label => {
+    if (activeFilter !== "all" && activeFilter !== label) return;
+    const cfg = MAIN_LABELS[label];
+    const tasks = sortTasks([...groups[label]]);
+    const mins = tasks.reduce((s, t) => s + parseDuration(t.duration), 0);
+
+    html += `<div class="label-group" id="group-${label.replace(/\s/g, '-')}">
+      <div class="label-header" onclick="toggleGroup('${label.replace(/\s/g, '-')}')">
+        <h2><span class="label-dot" style="background:${cfg.color}"></span>${cfg.icon} ${label}</h2>
+        <div class="header-right">
+          ${mins > 0 ? `<span class="label-time">${formatMinutes(mins)}</span>` : ''}
+          <span class="label-count">${tasks.length}</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+      </div>
+      <div class="label-tasks">${renderTasks(tasks, label)}</div>
+    </div>`;
+  });
+
+  // Needs Label group
+  if (needsLabel.length && (activeFilter === "all" || activeFilter === "_needslabel")) {
+    const tasks = sortTasks([...needsLabel]);
+    html += `<div class="label-group" id="group-needslabel">
+      <div class="label-header" onclick="toggleGroup('needslabel')">
+        <h2><span class="label-dot" style="background:#636e72"></span>🏷️ Needs Label</h2>
+        <div class="header-right">
+          <span class="label-count">${tasks.length}</span>
+          <span class="collapse-icon">▼</span>
+        </div>
+      </div>
+      <div class="label-tasks">${renderTasks(tasks, null)}</div>
+    </div>`;
+  }
+
+  dashboard.innerHTML = html;
+
+  // Footnotes
+  const metaCounts = {};
+  TASKS.forEach(t => {
+    t.labels.forEach(l => {
+      if (META_LABELS.includes(l)) {
+        metaCounts[l] = (metaCounts[l] || 0) + 1;
+      }
+    });
+  });
+
+  const footnotes = document.getElementById("footnotes");
+  footnotes.innerHTML = `<h3>Meta Labels (footnotes)</h3>
+    <div class="footnote-legend">
+      <div class="footnote-item">
+        <span class="footnote-badge">getmealabel</span>
+        <span><span class="footnote-count">${metaCounts.getmealabel || 0}</span> tasks need a proper label</span>
+      </div>
+      <div class="footnote-item">
+        <span class="footnote-badge">gimmeadate</span>
+        <span><span class="footnote-count">${metaCounts.gimmeadate || 0}</span> tasks need a due date</span>
+      </div>
+    </div>`;
+}
+
+function renderTasks(tasks, groupLabel) {
+  return tasks.map(t => {
+    const dueStatus = getDueStatus(t.dueDate);
+    const { display: dateDisplay, showDurationSeparately } = formatDateTimeRange(t.dueDate, t.duration);
+    const metaLabels = getMetaLabels(t);
+    const otherMainLabels = t.labels.filter(l => MAIN_LABELS[l] && l !== groupLabel);
+    const todoistUrl = "https://app.todoist.com/app/task/" + t.id;
+
+    return `<div class="task">
+      <div class="task-priority ${t.priority}"></div>
+      <div class="task-content">
+        <div class="task-title-row">
+          <div class="task-title">${escapeHtml(t.content)}</div>
+          <a class="task-link" href="${todoistUrl}" target="_blank" rel="noopener" title="Open in Todoist">&#x2197;</a>
+        </div>
+        <div class="task-meta">
+          ${dateDisplay ? `<span class="task-due ${dueStatus}">${dueStatus === 'overdue' ? '⚠ ' : ''}${dateDisplay}${t.recurring ? ' 🔁' : ''}</span>` : ''}
+          ${showDurationSeparately && t.duration ? `<span class="task-duration">⏱ ${t.duration}</span>` : ''}
+          <span class="task-project">${escapeHtml(t.projectName)}</span>
+          ${otherMainLabels.map(l => `<span style="font-size:11px;color:${MAIN_LABELS[l].color}">${MAIN_LABELS[l].icon} ${l}</span>`).join("")}
+        </div>
+        ${metaLabels.length ? `<div class="task-footnotes">${metaLabels.map(l => `<span class="footnote-chip">${l === 'getmealabel' ? 'needs label' : 'needs date'}</span>`).join("")}</div>` : ''}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleGroup(id) {
+  document.getElementById("group-" + id).classList.toggle("collapsed");
+}
+
+render();
+
+// --- Live update from Todoist API ---
+
+const API_BASE = "https://api.todoist.com/rest/v2";
+const TOKEN_KEY = "todoist_dashboard_token";
+
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+function showTokenModal() {
+  const modal = document.getElementById("token-modal");
+  const input = document.getElementById("token-input");
+  input.value = getToken() || "";
+  modal.classList.remove("hidden");
+  input.focus();
+}
+
+function closeTokenModal() {
+  document.getElementById("token-modal").classList.add("hidden");
+}
+
+function saveToken() {
+  const token = document.getElementById("token-input").value.trim();
+  if (!token) return;
+  localStorage.setItem(TOKEN_KEY, token);
+  closeTokenModal();
+  showToast("Token saved!", "success");
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.className = "toast " + type;
+  setTimeout(() => toast.classList.add("hidden"), 3000);
+}
+
+async function updateFromTodoist() {
+  const token = getToken();
+  if (!token) {
+    showTokenModal();
+    return;
+  }
+
+  const btn = document.getElementById("btn-update");
+  btn.classList.add("loading");
+  btn.disabled = true;
+
+  try {
+    const headers = { "Authorization": "Bearer " + token };
+
+    const [tasksRes, projectsRes] = await Promise.all([
+      fetch(API_BASE + "/tasks", { headers }),
+      fetch(API_BASE + "/projects", { headers })
+    ]);
+
+    if (!tasksRes.ok || !projectsRes.ok) {
+      if (tasksRes.status === 401 || projectsRes.status === 401) {
+        showToast("Invalid API token. Click the gear icon to update it.", "error");
+        return;
+      }
+      throw new Error("API error: " + tasksRes.status);
+    }
+
+    const [apiTasks, apiProjects] = await Promise.all([
+      tasksRes.json(),
+      projectsRes.json()
+    ]);
+
+    // Build project name map
+    const projectMap = {};
+    apiProjects.forEach(p => { projectMap[p.id] = p.name; });
+
+    // Transform API tasks to our format
+    const newTasks = apiTasks.map(t => {
+      const dueDate = t.due?.datetime || t.due?.date || null;
+      const dur = t.duration
+        ? (t.duration.unit === "minute" ? t.duration.amount + "m" : t.duration.amount + "h")
+        : null;
+      const recurring = t.due?.is_recurring ? t.due.string : null;
+
+      // Clean up content: strip Obsidian links and markdown
+      let content = t.content;
+      content = content.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+      content = content.replace(/^(Obsidian\s*:?\s*|OBSIDIAN\s*:?\s*)/i, "");
+
+      return {
+        id: t.id,
+        content: content,
+        labels: t.labels || [],
+        priority: "p" + t.priority,
+        projectName: projectMap[t.project_id] || "Unknown",
+        dueDate: dueDate,
+        duration: dur,
+        recurring: recurring || null
+      };
+    });
+
+    // Replace tasks and re-render
+    TASKS.length = 0;
+    newTasks.forEach(t => TASKS.push(t));
+
+    // Update today reference
+    TODAY.setTime(new Date().setHours(0,0,0,0));
+
+    activeFilter = "all";
+    render();
+
+    const now = new Date();
+    document.getElementById("last-updated").textContent =
+      "Updated " + now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+    showToast("Dashboard updated with " + TASKS.length + " tasks", "success");
+
+  } catch (err) {
+    console.error(err);
+    showToast("Failed to fetch: " + err.message, "error");
+  } finally {
+    btn.classList.remove("loading");
+    btn.disabled = false;
+  }
+}
+
+// Auto-update on load if token exists
+if (getToken()) {
+  updateFromTodoist();
+}
+
+// Close modal on Escape or outside click
+document.getElementById("token-modal").addEventListener("click", (e) => {
+  if (e.target.classList.contains("modal-overlay")) closeTokenModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeTokenModal();
+  if (e.key === "Enter" && !document.getElementById("token-modal").classList.contains("hidden")) saveToken();
+});
+</script>
+</body>
+</html>
