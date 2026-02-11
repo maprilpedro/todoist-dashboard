@@ -43,6 +43,87 @@
   .stat-value { font-size: 24px; font-weight: 700; color: var(--accent); }
   .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
+  /* Hero task */
+  .hero-task {
+    background: linear-gradient(135deg, rgba(108,92,231,0.06) 0%, rgba(108,92,231,0.02) 100%);
+    border: 1.5px solid var(--accent);
+    border-radius: 14px;
+    padding: 20px 28px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 2px 12px rgba(108,92,231,0.08);
+    transition: box-shadow 0.2s;
+  }
+  .hero-task:hover { box-shadow: 0 4px 20px rgba(108,92,231,0.14); }
+  .hero-task.hidden { display: none; }
+
+  .hero-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    font-weight: 700;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hero-label::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: hero-pulse 2s ease-in-out infinite;
+  }
+  @keyframes hero-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .hero-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .hero-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.3;
+    color: var(--text);
+  }
+  .hero-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .hero-meta .task-due { font-size: 12px; padding: 2px 9px; }
+  .hero-meta .task-duration { font-size: 12px; padding: 2px 9px; }
+  .hero-meta .task-project { font-size: 12px; }
+
+  .hero-link {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 16px;
+    transition: all 0.15s;
+  }
+  .hero-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(108,92,231,0.06);
+  }
+
   /* Summary chips */
   .summary-bar {
     display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
@@ -342,6 +423,7 @@
   </div>
 </div>
 
+<div class="hero-task hidden" id="hero-task"></div>
 <div class="summary-bar" id="summary-bar"></div>
 <div class="dashboard" id="dashboard"></div>
 <div class="footnotes-section" id="footnotes"></div>
@@ -467,7 +549,7 @@ const MAIN_LABELS = {
   "movie":          { color: "#fd79a8", icon: "🎬", order: 8, desc: "Movies to watch" },
 };
 
-const META_LABELS = ["getmealabel", "gimmeadate"];
+const META_LABELS = ["getmealabel", "gimmeadate", "dailyhighlight"];
 
 const TODAY = new Date("2026-02-10");
 TODAY.setHours(0, 0, 0, 0);
@@ -614,6 +696,30 @@ function render() {
   document.getElementById("overdue").textContent = TASKS.filter(t => getDueStatus(t.dueDate) === "overdue").length;
   const totalMins = TASKS.reduce((s, t) => s + parseDuration(t.duration), 0);
   document.getElementById("total-time").textContent = formatMinutes(totalMins);
+
+  // Hero task (dailyhighlight)
+  const heroEl = document.getElementById("hero-task");
+  const heroTask = TASKS.find(t => t.labels.includes("dailyhighlight"));
+  if (heroTask) {
+    const dueStatus = getDueStatus(heroTask.dueDate);
+    const { display: dateDisplay, showDurationSeparately } = formatDateTimeRange(heroTask.dueDate, heroTask.duration);
+    const todoistUrl = "https://app.todoist.com/app/task/" + heroTask.id;
+    heroEl.classList.remove("hidden");
+    heroEl.innerHTML = `
+      <div class="hero-label">Daily Highlight</div>
+      <div class="hero-content">
+        <div class="hero-title">${escapeHtml(heroTask.content)}</div>
+        <div class="hero-meta">
+          ${dateDisplay ? `<span class="task-due ${dueStatus}">${dueStatus === 'overdue' ? '⚠ ' : ''}${dateDisplay}${heroTask.recurring ? ' 🔁' : ''}</span>` : ''}
+          ${showDurationSeparately && heroTask.duration ? `<span class="task-duration">⏱ ${heroTask.duration}</span>` : ''}
+          <span class="task-project">${escapeHtml(heroTask.projectName)}</span>
+        </div>
+      </div>
+      <a class="hero-link" href="${todoistUrl}" target="_blank" rel="noopener" title="Open in Todoist">&#x2197;</a>`;
+  } else {
+    heroEl.classList.add("hidden");
+    heroEl.innerHTML = "";
+  }
 
   // Summary chips
   const summaryBar = document.getElementById("summary-bar");
