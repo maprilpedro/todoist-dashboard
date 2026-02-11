@@ -14,73 +14,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Todoist data
+      - name: Fetch and transform Todoist data
         env:
           TODOIST_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
         run: |
           set -e
-
-          # Verify token is set
           if [ -z "$TODOIST_TOKEN" ]; then
             echo "::error::TODOIST_API_TOKEN secret is not set"
             exit 1
           fi
-          echo "Token length: ${#TODOIST_TOKEN} chars"
 
-          # Fetch tasks
-          HTTP_CODE=$(curl -s -o /tmp/tasks.json -w "%{http_code}" \
-            -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/api/v1/tasks")
-          echo "Tasks API response: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Todoist tasks API returned HTTP $HTTP_CODE"
-            exit 1
-          fi
-
-          # Fetch projects
-          HTTP_CODE=$(curl -s -o /tmp/projects.json -w "%{http_code}" \
-            -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/api/v1/projects")
-          echo "Projects API response: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Todoist projects API returned HTTP $HTTP_CODE"
-            exit 1
-          fi
-
-          # Debug: show response structure
-          python3 -c "
-          import json
-          with open('/tmp/tasks.json') as f:
-              d = json.load(f)
-          print('Tasks type:', type(d).__name__)
-          if isinstance(d, dict):
-              print('Tasks keys:', list(d.keys()))
-          elif isinstance(d, list):
-              print('Tasks count:', len(d))
-              if d: print('First task keys:', list(d[0].keys()))
-          with open('/tmp/projects.json') as f:
-              d = json.load(f)
-          print('Projects type:', type(d).__name__)
-          if isinstance(d, dict):
-              print('Projects keys:', list(d.keys()))
-          elif isinstance(d, list):
-              print('Projects count:', len(d))
-              if d: print('First project keys:', list(d[0].keys()))
-          "
-
-          # Transform into dashboard format
           python3 - <<'PYEOF'
-          import json
+          import json, re, os, urllib.request
           from datetime import datetime, timezone
 
-          with open("/tmp/tasks.json") as f:
-              raw_tasks = json.load(f)
-          with open("/tmp/projects.json") as f:
-              raw_projects = json.load(f)
+          TOKEN = os.environ["TODOIST_TOKEN"]
+          BASE = "https://api.todoist.com/api/v1"
 
-          # Handle both array and wrapped responses
-          api_tasks = raw_tasks if isinstance(raw_tasks, list) else raw_tasks.get("results", raw_tasks.get("items", []))
-          api_projects = raw_projects if isinstance(raw_projects, list) else raw_projects.get("results", raw_projects.get("items", []))
+          def fetch_all(endpoint):
+              """Fetch all pages from a paginated Todoist API v1 endpoint."""
+              results = []
+              cursor = None
+              while True:
+                  url = f"{BASE}/{endpoint}"
+                  if cursor:
+                      url += f"?cursor={cursor}"
+                  req = urllib.request.Request(url, headers={"Authorization": f"Bearer {TOKEN}"})
+                  with urllib.request.urlopen(req) as resp:
+                      data = json.loads(resp.read())
+                  results.extend(data.get("results", []))
+                  cursor = data.get("next_cursor")
+                  if not cursor:
+                      break
+              return results
+
+          print("Fetching tasks...")
+          api_tasks = fetch_all("tasks")
+          print(f"  Got {len(api_tasks)} tasks")
+
+          print("Fetching projects...")
+          api_projects = fetch_all("projects")
+          print(f"  Got {len(api_projects)} projects")
 
           project_map = {p["id"]: p["name"] for p in api_projects}
 
@@ -99,7 +73,6 @@ jobs:
                   amount = t["duration"]["amount"]
                   dur = f"{amount}m" if unit == "minute" else f"{amount}h"
 
-              import re
               content = t["content"]
               content = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', content)
               content = re.sub(r'^(Obsidian\s*:?\s*)', '', content, flags=re.IGNORECASE)
@@ -109,7 +82,7 @@ jobs:
                   "content": content,
                   "labels": t.get("labels", []),
                   "priority": f"p{t['priority']}",
-                  "projectName": project_map.get(t["project_id"], "Unknown"),
+                  "projectName": project_map.get(t.get("project_id"), "Unknown"),
                   "dueDate": due_date,
                   "duration": dur,
                   "recurring": recurring,
@@ -123,7 +96,7 @@ jobs:
           with open("data.json", "w") as f:
               json.dump(data, f, ensure_ascii=False)
 
-          print(f"Wrote {len(tasks)} tasks")
+          print(f"Wrote {len(tasks)} tasks to data.json")
           PYEOF
 
       - name: Commit and push if changed
