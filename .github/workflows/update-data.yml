@@ -47,15 +47,40 @@ jobs:
             exit 1
           fi
 
+          # Debug: show response structure
+          python3 -c "
+          import json
+          with open('/tmp/tasks.json') as f:
+              d = json.load(f)
+          print('Tasks type:', type(d).__name__)
+          if isinstance(d, dict):
+              print('Tasks keys:', list(d.keys()))
+          elif isinstance(d, list):
+              print('Tasks count:', len(d))
+              if d: print('First task keys:', list(d[0].keys()))
+          with open('/tmp/projects.json') as f:
+              d = json.load(f)
+          print('Projects type:', type(d).__name__)
+          if isinstance(d, dict):
+              print('Projects keys:', list(d.keys()))
+          elif isinstance(d, list):
+              print('Projects count:', len(d))
+              if d: print('First project keys:', list(d[0].keys()))
+          "
+
           # Transform into dashboard format
           python3 - <<'PYEOF'
           import json
           from datetime import datetime, timezone
 
           with open("/tmp/tasks.json") as f:
-              api_tasks = json.load(f)
+              raw_tasks = json.load(f)
           with open("/tmp/projects.json") as f:
-              api_projects = json.load(f)
+              raw_projects = json.load(f)
+
+          # Handle both array and wrapped responses
+          api_tasks = raw_tasks if isinstance(raw_tasks, list) else raw_tasks.get("results", raw_tasks.get("items", []))
+          api_projects = raw_projects if isinstance(raw_projects, list) else raw_projects.get("results", raw_projects.get("items", []))
 
           project_map = {p["id"]: p["name"] for p in api_projects}
 
