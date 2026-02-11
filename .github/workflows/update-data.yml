@@ -30,7 +30,7 @@ jobs:
           # Fetch tasks
           HTTP_CODE=$(curl -s -o /tmp/tasks.json -w "%{http_code}" \
             -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/rest/v2/tasks")
+            "https://api.todoist.com/api/v1/tasks")
           echo "Tasks API response: $HTTP_CODE"
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Todoist tasks API returned HTTP $HTTP_CODE"
@@ -40,7 +40,7 @@ jobs:
           # Fetch projects
           HTTP_CODE=$(curl -s -o /tmp/projects.json -w "%{http_code}" \
             -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/rest/v2/projects")
+            "https://api.todoist.com/api/v1/projects")
           echo "Projects API response: $HTTP_CODE"
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::Todoist projects API returned HTTP $HTTP_CODE"
