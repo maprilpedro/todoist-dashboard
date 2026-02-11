@@ -327,47 +327,6 @@
     display: flex; align-items: center; gap: 8px;
   }
 
-  .btn-settings {
-    width: 34px; height: 34px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--surface);
-    color: var(--text-muted); cursor: pointer; font-size: 16px;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-  }
-  .btn-settings:hover { border-color: var(--accent); color: var(--accent); }
-
-  /* Token modal */
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.3);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100; backdrop-filter: blur(2px);
-  }
-  .modal-overlay.hidden { display: none; }
-  .modal {
-    background: var(--surface); border-radius: 12px; padding: 24px;
-    width: 420px; max-width: 90vw; border: 1px solid var(--border);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-  }
-  .modal h3 { font-size: 16px; margin-bottom: 8px; }
-  .modal p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
-  .modal input {
-    width: 100%; padding: 10px 12px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg);
-    color: var(--text); font-size: 13px; font-family: monospace;
-    margin-bottom: 16px;
-  }
-  .modal input:focus { outline: none; border-color: var(--accent); }
-  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-  .modal-actions button {
-    padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;
-    border: 1px solid var(--border); background: var(--surface); color: var(--text);
-    transition: all 0.15s;
-  }
-  .modal-actions button.primary {
-    background: var(--accent); color: #fff; border-color: var(--accent);
-  }
-  .modal-actions button.primary:hover { background: #5a4bd1; }
-  .modal-actions button:not(.primary):hover { border-color: var(--text-muted); }
 
   .toast {
     position: fixed; bottom: 24px; right: 24px;
@@ -391,7 +350,7 @@
 <div class="header">
   <div>
     <h1>Todoist Time Scheduler</h1>
-    <div class="header-sub">Mapril Pedro Ferreira &middot; Week 7 &middot; 11 Feb 2026</div>
+    <div class="header-sub" id="header-sub"></div>
   </div>
   <div style="display:flex;align-items:center;gap:32px">
     <div class="header-stats">
@@ -413,11 +372,10 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn-update" id="btn-update" onclick="updateFromTodoist()">
+      <button class="btn-update" id="btn-update" onclick="loadData()">
         <span class="spinner"></span>
-        <span class="btn-label">Update</span>
+        <span class="btn-label">Refresh</span>
       </button>
-      <button class="btn-settings" onclick="showTokenModal()" title="API Token Settings">&#x2699;</button>
       <span class="last-updated" id="last-updated"></span>
     </div>
   </div>
@@ -428,18 +386,6 @@
 <div class="dashboard" id="dashboard"></div>
 <div class="footnotes-section" id="footnotes"></div>
 
-<div class="modal-overlay hidden" id="token-modal">
-  <div class="modal">
-    <h3>Todoist API Token</h3>
-    <p>Enter your API token to enable live updates. Find it at:<br>
-      <strong>Todoist Settings &rarr; Integrations &rarr; Developer &rarr; API token</strong></p>
-    <input type="password" id="token-input" placeholder="Paste your API token here..." />
-    <div class="modal-actions">
-      <button onclick="closeTokenModal()">Cancel</button>
-      <button class="primary" onclick="saveToken()">Save</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast hidden" id="toast"></div>
 
@@ -460,8 +406,14 @@ const MAIN_LABELS = {
 
 const META_LABELS = ["getmealabel", "gimmeadate", "dailyhighlight"];
 
-const TODAY = new Date("2026-02-11");
+const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
+
+// Dynamic header subtitle
+const weekNum = Math.ceil(((TODAY - new Date(TODAY.getFullYear(), 0, 1)) / 86400000 + new Date(TODAY.getFullYear(), 0, 1).getDay() + 1) / 7);
+document.getElementById("header-sub").textContent =
+  "Mapril Pedro Ferreira \u00B7 Week " + weekNum + " \u00B7 " +
+  TODAY.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 function parseDuration(dur) {
   if (!dur) return 0;
@@ -754,32 +706,7 @@ function toggleGroup(id) {
 
 render();
 
-// --- Live update from Todoist API ---
-
-const API_BASE = "https://api.todoist.com/rest/v2";
-const TOKEN_KEY = "todoist_dashboard_token";
-
-function getToken() { return localStorage.getItem(TOKEN_KEY); }
-
-function showTokenModal() {
-  const modal = document.getElementById("token-modal");
-  const input = document.getElementById("token-input");
-  input.value = getToken() || "";
-  modal.classList.remove("hidden");
-  input.focus();
-}
-
-function closeTokenModal() {
-  document.getElementById("token-modal").classList.add("hidden");
-}
-
-function saveToken() {
-  const token = document.getElementById("token-input").value.trim();
-  if (!token) return;
-  localStorage.setItem(TOKEN_KEY, token);
-  closeTokenModal();
-  showToast("Token saved!", "success");
-}
+// --- Load data from data.json (generated by GitHub Action) ---
 
 function showToast(msg, type) {
   const toast = document.getElementById("toast");
@@ -788,107 +715,41 @@ function showToast(msg, type) {
   setTimeout(() => toast.classList.add("hidden"), 3000);
 }
 
-async function updateFromTodoist() {
-  const token = getToken();
-  if (!token) {
-    showTokenModal();
-    return;
-  }
-
+async function loadData() {
   const btn = document.getElementById("btn-update");
   btn.classList.add("loading");
   btn.disabled = true;
 
   try {
-    const headers = { "Authorization": "Bearer " + token };
+    const res = await fetch("data.json?t=" + Date.now());
+    if (!res.ok) throw new Error("data.json not found (run the GitHub Action first)");
+    const data = await res.json();
 
-    const [tasksRes, projectsRes] = await Promise.all([
-      fetch(API_BASE + "/tasks", { headers }),
-      fetch(API_BASE + "/projects", { headers })
-    ]);
-
-    if (!tasksRes.ok || !projectsRes.ok) {
-      if (tasksRes.status === 401 || projectsRes.status === 401) {
-        showToast("Invalid API token. Click the gear icon to update it.", "error");
-        return;
-      }
-      throw new Error("API error: " + tasksRes.status);
-    }
-
-    const [apiTasks, apiProjects] = await Promise.all([
-      tasksRes.json(),
-      projectsRes.json()
-    ]);
-
-    // Build project name map
-    const projectMap = {};
-    apiProjects.forEach(p => { projectMap[p.id] = p.name; });
-
-    // Transform API tasks to our format
-    const newTasks = apiTasks.map(t => {
-      const dueDate = t.due?.datetime || t.due?.date || null;
-      const dur = t.duration
-        ? (t.duration.unit === "minute" ? t.duration.amount + "m" : t.duration.amount + "h")
-        : null;
-      const recurring = t.due?.is_recurring ? t.due.string : null;
-
-      // Clean up content: strip Obsidian links and markdown
-      let content = t.content;
-      content = content.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-      content = content.replace(/^(Obsidian\s*:?\s*|OBSIDIAN\s*:?\s*)/i, "");
-
-      return {
-        id: t.id,
-        content: content,
-        labels: t.labels || [],
-        priority: "p" + t.priority,
-        projectName: projectMap[t.project_id] || "Unknown",
-        dueDate: dueDate,
-        duration: dur,
-        recurring: recurring || null
-      };
-    });
-
-    // Replace tasks and re-render
     TASKS.length = 0;
-    newTasks.forEach(t => TASKS.push(t));
+    data.tasks.forEach(t => TASKS.push(t));
 
-    // Update today reference
-    TODAY.setTime(new Date().setHours(0,0,0,0));
-
+    TODAY.setTime(new Date().setHours(0, 0, 0, 0));
     activeFilter = "all";
     render();
 
-    const now = new Date();
-    document.getElementById("last-updated").textContent =
-      "Updated " + now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    // Show when data was last generated
+    if (data.updated) {
+      const d = new Date(data.updated);
+      document.getElementById("last-updated").textContent =
+        "Data from " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    }
 
-    showToast("Dashboard updated with " + TASKS.length + " tasks", "success");
-
+    showToast("Loaded " + TASKS.length + " tasks", "success");
   } catch (err) {
     console.error(err);
-    showToast("Failed to fetch: " + err.message, "error");
+    showToast(err.message, "error");
   } finally {
     btn.classList.remove("loading");
     btn.disabled = false;
   }
 }
 
-// Auto-update on load if token exists, otherwise prompt for token
-if (getToken()) {
-  updateFromTodoist();
-} else {
-  showTokenModal();
-}
-
-// Close modal on Escape or outside click
-document.getElementById("token-modal").addEventListener("click", (e) => {
-  if (e.target.classList.contains("modal-overlay")) closeTokenModal();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeTokenModal();
-  if (e.key === "Enter" && !document.getElementById("token-modal").classList.contains("hidden")) saveToken();
-});
+loadData();
 </script>
 </body>
 </html>
