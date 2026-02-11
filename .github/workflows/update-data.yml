@@ -20,12 +20,32 @@ jobs:
         run: |
           set -e
 
-          # Fetch tasks and projects in parallel
-          curl -sf -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/rest/v2/tasks" -o /tmp/tasks.json
+          # Verify token is set
+          if [ -z "$TODOIST_TOKEN" ]; then
+            echo "::error::TODOIST_API_TOKEN secret is not set"
+            exit 1
+          fi
+          echo "Token length: ${#TODOIST_TOKEN} chars"
 
-          curl -sf -H "Authorization: Bearer $TODOIST_TOKEN" \
-            "https://api.todoist.com/rest/v2/projects" -o /tmp/projects.json
+          # Fetch tasks
+          HTTP_CODE=$(curl -s -o /tmp/tasks.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TODOIST_TOKEN" \
+            "https://api.todoist.com/rest/v2/tasks")
+          echo "Tasks API response: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Todoist tasks API returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          # Fetch projects
+          HTTP_CODE=$(curl -s -o /tmp/projects.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TODOIST_TOKEN" \
+            "https://api.todoist.com/rest/v2/projects")
+          echo "Projects API response: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Todoist projects API returned HTTP $HTTP_CODE"
+            exit 1
+          fi
 
           # Transform into dashboard format
           python3 - <<'PYEOF'
